@@ -14,15 +14,26 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = 3000;
 
-// Initialize GoogleGenAI SDK with standard options
-const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY,
-  httpOptions: {
-    headers: {
-      'User-Agent': 'aistudio-build',
+// Lazy initialized GoogleGenAI client singleton to prevent module import startup failures
+let aiClient: GoogleGenAI | null = null;
+
+function getAiClient(): GoogleGenAI {
+  if (!aiClient) {
+    const key = process.env.GEMINI_API_KEY;
+    if (!key) {
+      console.warn("WARNING: GEMINI_API_KEY is not defined in the environment. AI-powered features will fail until configured.");
     }
+    aiClient = new GoogleGenAI({
+      apiKey: key || "temporary_missing_key",
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build',
+        }
+      }
+    });
   }
-});
+  return aiClient;
+}
 
 /**
  * Robust wrapper for Gemini generateContent that handles 503/UNAVAILABLE errors
@@ -37,7 +48,7 @@ async function generateContentWithRetry(params: any, maxRetries = 2) {
 
   while (true) {
     try {
-      return await ai.models.generateContent(params);
+      return await getAiClient().models.generateContent(params);
     } catch (err: any) {
       attempt++;
       const errorMessage = err?.message || String(err);
@@ -71,7 +82,7 @@ async function generateContentWithRetry(params: any, maxRetries = 2) {
 }
 
 // Create storage directory if not exists
-const DATA_DIR = path.join(__dirname, "data");
+const DATA_DIR = path.join(process.cwd(), "data");
 const STORAGE_FILE = path.join(DATA_DIR, "storage.json");
 
 if (!fs.existsSync(DATA_DIR)) {
@@ -434,7 +445,9 @@ app.delete("/api/leads/:id", (req, res) => {
 
 // 8. Serving embeddable script
 app.get("/widget.js", (req, res) => {
-  const hostUrl = process.env.APP_URL || `http://localhost:${PORT}`;
+  const protocol = req.headers["x-forwarded-proto"] || req.protocol || "http";
+  const host = req.headers["x-forwarded-host"] || req.get("host") || `localhost:${PORT}`;
+  const hostUrl = process.env.APP_URL || `${protocol}://${host}`;
   
   const widgetScript = `
 (function() {
@@ -717,7 +730,7 @@ const initApp = async () => {
     console.log("Vite middleware mounted.");
   } else {
     // Standard static build serve
-    const distPath = path.join(__dirname, "dist");
+    const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
     app.get("*", (req, res) => {
       res.sendFile(path.join(distPath, "index.html"));
