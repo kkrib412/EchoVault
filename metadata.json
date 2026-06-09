@@ -1,0 +1,8 @@
+{
+  "name": "AI Forge Suite",
+  "description": "High-perfomance AI Chatbot Builder & Automated Website Audit Platform powering conversions and engagement.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
