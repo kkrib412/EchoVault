@@ -443,6 +443,44 @@ app.delete("/api/leads/:id", (req, res) => {
   res.json({ success: true });
 });
 
+// 7.5. Generate AI personalized Proposal / warm outreach email pitch
+app.post("/api/leads/pitch", async (req, res) => {
+  const { name, email, detail, industry, businessName } = req.body;
+  if (!name) {
+    return res.status(400).json({ error: "Lead Name is required" });
+  }
+
+  try {
+    const systemPrompt = `You are an elite, highly persuasive B2B sales development representative and growth strategist at AI Forge.
+Your goal is to draft a hyper-compelling, professional, and personalized warm outreach email pitch.
+Tailor your recommendations specifically to the prospect's company or website info.
+
+Identify and reference potential areas of improvement such as mobile responsiveness, custom AI answering chatbots, page load speeds, and conversion rates.
+Propose a tailored consultative plan of action. The pitch must write out a ready-to-send corporate email with a Subject Line, personalized greeting, consultative body paragraph, concise 3-bullet customized checklist, and a warm call to action close. Keep the output under 300 words, formatted in clean markdown.`;
+
+    const contents = `Draft a B2B warm greeting proposal email.
+Prospect details:
+- Name: ${name}
+- Email: ${email || "Not provided"}
+- Context/Website/Source: ${detail || "General business"}
+- Industry metadata: ${industry || "Technology"}
+- Sender Company: ${businessName || "AI Forge Suite Owner"}`;
+
+    const response = await generateContentWithRetry({
+      model: "gemini-3.5-flash",
+      contents,
+      config: {
+        systemInstruction: systemPrompt,
+      }
+    });
+
+    res.json({ success: true, pitch: response?.text || "Failed to generate pitch. Please verify prompt parameters." });
+  } catch (err: any) {
+    console.error("Outreach Pitch generation error:", err);
+    res.status(500).json({ error: "Failed to generate proposal warm pitch. Verify your Gemini key.", message: err.message });
+  }
+});
+
 // 8. Serving embeddable script
 app.get("/widget.js", (req, res) => {
   const protocol = req.headers["x-forwarded-proto"] || req.protocol || "http";
@@ -451,13 +489,43 @@ app.get("/widget.js", (req, res) => {
   
   const widgetScript = `
 (function() {
+  // Read config from target script tags
+  const currentScript = document.currentScript;
+  const botId = currentScript ? (currentScript.getAttribute('data-bot-id') || 'default') : 'default';
+  const widgetColor = currentScript ? (currentScript.getAttribute('data-color') || 'sky') : 'sky';
+  const widgetPosition = currentScript ? (currentScript.getAttribute('data-position') || 'right') : 'right';
+  const rawGreeting = currentScript ? currentScript.getAttribute('data-greeting') : '';
+  const widgetGreeting = rawGreeting ? decodeURIComponent(rawGreeting) : 'Hello! How can I assist you today?';
+
+  // Map primary color based on theme selection
+  let colorTheme = '#0284c7'; // Sky default
+  let hoverTheme = '#0369a1';
+  let focusTheme = '#38bdf8';
+  if (widgetColor === 'emerald') {
+    colorTheme = '#10b981';
+    hoverTheme = '#059669';
+    focusTheme = '#34d399';
+  } else if (widgetColor === 'indigo') {
+    colorTheme = '#6366f1';
+    hoverTheme = '#4f46e5';
+    focusTheme = '#818cf8';
+  } else if (widgetColor === 'rose') {
+    colorTheme = '#f43f5e';
+    hoverTheme = '#e11d48';
+    focusTheme = '#fb7185';
+  } else if (widgetColor === 'amber') {
+    colorTheme = '#f59e0b';
+    hoverTheme = '#d97706';
+    focusTheme = '#fbbf24';
+  }
+
   // Styles for the floating chat window
   const style = document.createElement('style');
   style.innerHTML = \`
     .aiforge-chat-bubble {
       position: fixed;
       bottom: 24px;
-      right: 24px;
+      \${widgetPosition === 'left' ? 'left: 24px; right: auto;' : 'right: 24px; left: auto;'}
       width: 60px;
       height: 60px;
       border-radius: 50%;
@@ -478,18 +546,18 @@ app.get("/widget.js", (req, res) => {
     .aiforge-chat-bubble svg {
       width: 28px;
       height: 28px;
-      color: #38bdf8;
+      color: \${colorTheme};
     }
     .aiforge-chat-container {
       position: fixed;
       bottom: 96px;
-      right: 24px;
+      \${widgetPosition === 'left' ? 'left: 24px; right: auto;' : 'right: 24px; left: auto;'}
       width: 380px;
       height: 540px;
       border-radius: 16px;
       background: #0f172a;
       box-shadow: 0 8px 30px rgba(0,0,0,0.4);
-      border: 1px solid rgba(56, 189, 248, 0.2);
+      border: 1px solid \${colorTheme}44;
       display: none;
       flex-direction: column;
       overflow: hidden;
@@ -548,7 +616,7 @@ app.get("/widget.js", (req, res) => {
       border-bottom-left-radius: 2px;
     }
     .aiforge-msg-user {
-      background: #0284c7;
+      background: \${colorTheme};
       color: #ffffff;
       align-self: flex-end;
       border-bottom-right-radius: 2px;
@@ -574,10 +642,10 @@ app.get("/widget.js", (req, res) => {
       color: #64748b;
     }
     .aiforge-chat-input:focus {
-      border-color: #38bdf8;
+      border-color: \${focusTheme};
     }
     .aiforge-chat-send {
-      background: #0284c7;
+      background: \${colorTheme};
       color: white;
       border: none;
       border-radius: 8px;
@@ -587,27 +655,27 @@ app.get("/widget.js", (req, res) => {
       cursor: pointer;
     }
     .aiforge-chat-send:hover {
-      background: #0369a1;
+      background: \${hoverTheme};
     }
     @media (max-width: 480px) {
       .aiforge-chat-container {
         width: calc(100% - 32px);
         height: 480px;
         right: 16px;
+        \${widgetPosition === 'left' ? 'left: 16px; right: auto;' : 'right: 16px; left: auto;'}
         bottom: 84px;
       }
     }
   \`;
   document.head.appendChild(style);
 
-  // Read config from target script tags
-  const currentScript = document.currentScript;
-  const botId = currentScript ? currentScript.getAttribute('data-bot-id') : 'default';
-
   // Create & mount chat bubble
   const bubble = document.createElement('div');
   bubble.className = 'aiforge-chat-bubble';
   bubble.innerHTML = \`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 21 1.9-5.7a8.5 8.5 0 1 1 3.8 3.8z"/></svg>\`;
+  if (widgetGreeting) {
+    bubble.title = widgetGreeting;
+  }
   document.body.appendChild(bubble);
 
   // Create & mount chat window
@@ -622,7 +690,7 @@ app.get("/widget.js", (req, res) => {
       <button class="aiforge-chat-close">&times;</button>
     </div>
     <div class="aiforge-chat-messages" id="aiforge-msg-container">
-      <div class="aiforge-msg aiforge-msg-bot">Hello! How can I assist you today?</div>
+      <div class="aiforge-msg aiforge-msg-bot">\${widgetGreeting}</div>
     </div>
     <div class="aiforge-chat-input-area">
       <input type="text" class="aiforge-chat-input" placeholder="Type your message..." id="aiforge-msg-input" />
@@ -637,7 +705,7 @@ app.get("/widget.js", (req, res) => {
   const msgSend = container.querySelector('#aiforge-msg-send');
   const closeBtn = container.querySelector('.aiforge-chat-close');
   const titleSpan = container.querySelector('#aiforge-company-title');
-  const history = [];
+  const history = [{ sender: 'bot', text: widgetGreeting }];
 
   // Toggle visible states
   bubble.addEventListener('click', function() {

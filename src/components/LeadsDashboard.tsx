@@ -15,7 +15,8 @@ import {
   TrendingUp,
   Briefcase,
   Download,
-  Search
+  Search,
+  Sparkles
 } from "lucide-react";
 import { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
@@ -33,6 +34,51 @@ export default function LeadsDashboard({ chatLeads, consultationLeads, onDeleteL
   const [activeFilter, setActiveFilter] = useState<"all" | "chat" | "consult">("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [isDeletingId, setIsDeletingId] = useState<string | null>(null);
+
+  // B2B AI Proposal Pitch Engine States
+  const [pitchLeadId, setPitchLeadId] = useState<string | null>(null);
+  const [pitchText, setPitchText] = useState<string | null>(null);
+  const [isGeneratingPitch, setIsGeneratingPitch] = useState(false);
+  const [copiedPitch, setCopiedPitch] = useState(false);
+  const [showPitchModal, setShowPitchModal] = useState(false);
+  const [pitchError, setPitchError] = useState<string | null>(null);
+
+  const handleGeneratePitch = async (lead: { id: string; name: string; email: string; detail: string }) => {
+    setPitchLeadId(lead.id);
+    setPitchText(null);
+    setPitchError(null);
+    setIsGeneratingPitch(true);
+    setShowPitchModal(true);
+
+    try {
+      const res = await fetch("/api/leads/pitch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: lead.name,
+          email: lead.email,
+          detail: lead.detail,
+          industry: botName || "Technology",
+          businessName: "AI Forge Growth Suite"
+        })
+      });
+
+      if (!res.ok) {
+        throw new Error("Outreach API returned an error status.");
+      }
+
+      const data = await res.json();
+      if (data.success && data.pitch) {
+        setPitchText(data.pitch);
+      } else {
+        throw new Error(data.error || "Failed to generate optimized pitch.");
+      }
+    } catch (err: any) {
+      setPitchError("Could not retrieve B2B Enterprise Pitch. Confirm your Gemini API Key is set and server-side routes are fully active.");
+    } finally {
+      setIsGeneratingPitch(false);
+    }
+  };
 
   const handleDelete = async (id: string) => {
     setIsDeletingId(id);
@@ -278,6 +324,22 @@ export default function LeadsDashboard({ chatLeads, consultationLeads, onDeleteL
                         </div>
                       )}
 
+                      <div className="flex justify-end pt-1">
+                        <button
+                          type="button"
+                          onClick={() => handleGeneratePitch({
+                            id: lead.id,
+                            name: lead.name,
+                            email: lead.email || "No email",
+                            detail: `Prospect joined our interactive bubble website conversation from source chatbot: ${lead.sourceBot}. Initial engagement message: "${lead.initialMessage || ""}".`
+                          })}
+                          className="px-3 py-1.5 text-[10px] font-bold text-sky-400 bg-sky-950/40 hover:bg-sky-900 border border-sky-900/30 hover:border-sky-500/40 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
+                        >
+                          <Sparkles className="w-3.5 h-3.5 text-yellow-400" />
+                          Personalize AI Pitch
+                        </button>
+                      </div>
+
                       <div className="flex items-center justify-between text-[10px] text-slate-500 border-t border-slate-850 pt-3">
                         <span className="flex items-center gap-1">
                           <CheckCircle className="w-3 h-3 text-emerald-500" />
@@ -359,6 +421,22 @@ export default function LeadsDashboard({ chatLeads, consultationLeads, onDeleteL
                         )}
                       </div>
 
+                      <div className="flex justify-end pt-1">
+                        <button
+                          type="button"
+                          onClick={() => handleGeneratePitch({
+                            id: consult.id,
+                            name: consult.name,
+                            email: consult.email,
+                            detail: `Prospect requested an organic website audit and consultative optimization proposal on domain: ${consult.website}. Additional special instructions given by user: "${consult.notes || "None specified"}"`
+                          })}
+                          className="px-3 py-1.5 text-[10px] font-bold text-sky-400 bg-sky-950/40 hover:bg-sky-900 border border-sky-900/30 hover:border-sky-500/40 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
+                        >
+                          <Sparkles className="w-3.5 h-3.5 text-yellow-400" />
+                          Personalize AI Pitch
+                        </button>
+                      </div>
+
                       <div className="flex items-center justify-between text-[10px] text-slate-500 border-t border-slate-850 pt-3">
                         <span className="flex items-center gap-1">
                           <CheckCircle className="w-3 h-3 text-emerald-500" />
@@ -378,6 +456,98 @@ export default function LeadsDashboard({ chatLeads, consultationLeads, onDeleteL
         )}
 
       </div>
+
+      {/* Modern B2B AI Proposal Pitch Dialog Layer Modal */}
+      <AnimatePresence>
+        {showPitchModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-555"
+          >
+            <motion.div
+              initial={{ scale: 0.95, y: 15 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 15 }}
+              className="bg-[#0b101c] border border-slate-800 rounded-2xl max-w-2xl w-full max-h-[85vh] overflow-hidden shadow-2xl relative flex flex-col"
+            >
+              
+              {/* Modal Core Headers */}
+              <div className="p-5 bg-slate-900 border-b border-slate-800 flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 bg-sky-500/10 border border-sky-500/10 rounded-lg text-sky-400">
+                    <Sparkles className="w-4 h-4 text-yellow-400 animate-pulse" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-semibold text-white">AI B2B Personalized Outreach Proposal</h3>
+                    <p className="text-[10px] text-slate-400">Gemini-optimized B2B trigger pitch crafted specifically for high conversion prospect follow-ups.</p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowPitchModal(false);
+                    setPitchText(null);
+                    setPitchError(null);
+                  }}
+                  className="px-2.5 py-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded text-xs transition-colors cursor-pointer"
+                >
+                  Close
+                </button>
+              </div>
+
+              {/* Dynamic Scroll Content Box */}
+              <div className="p-6 overflow-y-auto space-y-4 flex-1">
+                {isGeneratingPitch ? (
+                  <div className="py-16 text-center space-y-3">
+                    <RefreshCw className="w-8 h-8 text-sky-400 animate-spin mx-auto" />
+                    <p className="text-xs text-slate-400">Consulting Gemini models to synthesize company benchmarks and compose consultative pitch...</p>
+                  </div>
+                ) : pitchError ? (
+                  <div className="p-4 bg-red-955 border border-red-900 rounded-xl text-xs text-red-400 text-center font-medium">
+                    {pitchError}
+                  </div>
+                ) : pitchText ? (
+                  <div className="space-y-4">
+                    <div className="bg-[#070b12] border border-slate-850 p-5 rounded-xl font-mono text-xs text-slate-300 leading-relaxed whitespace-pre-wrap select-all">
+                      {pitchText}
+                    </div>
+
+                    <div className="flex justify-end pt-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(pitchText);
+                          setCopiedPitch(true);
+                          setTimeout(() => setCopiedPitch(false), 2000);
+                        }}
+                        className="px-4 py-2 bg-sky-600 hover:bg-sky-500 border border-sky-500/20 text-white font-semibold text-xs rounded-xl shadow transition-all flex items-center gap-1.5 cursor-pointer"
+                      >
+                        {copiedPitch ? (
+                          <>
+                            <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
+                            Copied Outreach!
+                          </>
+                        ) : (
+                          <>
+                            <Download className="w-3.5 h-3.5" />
+                            Copy Draft Pitch
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-center text-xs text-slate-500 py-10">Waiting for trigger context...</p>
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
     </div>
   );
 }
