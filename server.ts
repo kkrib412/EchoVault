@@ -57,26 +57,26 @@ async function generateContentWithRetry(params: any, maxRetries = 2) {
                             errorMessage.includes("high demand") ||
                             err?.status === 503;
 
-      console.error(`Gemini API error (attempt ${attempt}/${maxRetries + 1}) on model ${params.model}:`, errorMessage);
-
       // If it's a 503 / unavailable error and we're not already on the fallback model, swap immediately
       if (isUnavailable && params.model !== fallbackModel) {
-        console.warn(`Model ${params.model} is experiencing high demand / unavailable. Automatically falling back to highly available ${fallbackModel}...`);
+        console.warn(`WARNING: Model ${params.model} returned 503/UNAVAILABLE (attempt ${attempt}/${maxRetries + 1}). Automatically falling back to highly available ${fallbackModel}...`);
         params.model = fallbackModel;
         // Quick short delay for fallback trial
         delay = 500;
         continue;
       }
 
-      // If we've exhausted all retries, throw the error
-      if (attempt > maxRetries) {
+      // If we still have retry attempts remaining
+      if (attempt <= maxRetries) {
+        console.warn(`WARNING: Gemini API error slot filled (attempt ${attempt}/${maxRetries + 1}) on model ${params.model}:`, errorMessage);
+        console.log(`Waiting ${delay}ms before retrying...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        delay *= 2;
+      } else {
+        // Only log to console.error when all attempts and fallback options are fully exhausted
+        console.error(`FATAL: Gemini API error completely exhausted retries on model ${params.model}:`, errorMessage);
         throw err;
       }
-
-      // Exponential backoff wait
-      console.log(`Waiting ${delay}ms before retrying...`);
-      await new Promise(resolve => setTimeout(resolve, delay));
-      delay *= 2;
     }
   }
 }
